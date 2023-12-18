@@ -1,0 +1,9 @@
+include CHANGES.rst CONTRIBUTORS.rst LICENCE MANIFEST.in README.rst README-ctan.md
+recursive-include webquiz *.py webquiz.dtd README-scripts
+exclude webquiz/mathquiz_sms.py
+recursive-include doc *.tex  *.png makedoc README-doc
+recursive-include doc/examples *.tex makeimages
+recursive-include latex pgfsys*.def *.cfg *.cls *.lang *.mk4 webquiz.ini
+recursive-include css *.scss
+include javascript/webquiz.js
+include tests *.tex README

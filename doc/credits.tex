@@ -1,0 +1,46 @@
+\documentclass{webquiz}
+\usepackage{color,hyperref}
+\newcommand{\WebQuiz}{\textbf{WebQuiz}}
+
+\title{WebQuiz credits}
+\UnitCode{WebQuiz}
+
+\begin{document}
+
+\begin{discussion}[Credits]
+    \WebQuiz{} was written and developed in the
+    \href{http://www.maths.usyd.edu.au/}{School of Mathematics and
+    Statistics} at the \href{http://www.usyd.edu.au/}{University of
+    Sydney}.  The system is built on \LaTeX{} with the conversion from
+    \LaTeX{} to HTML being done by Eitan Gurari's
+    \href{http://www.cis.ohio-state.edu/~gurari/TeX4ht/mn.html}{TeX4ht},
+    and Michal Hoftich's
+    \href{https://github.com/michal-h21/make4ht}{make4ht}.
+
+    To write quizzes using \WebQuiz{} it is only necessary to know
+    \LaTeX, however, the \WebQuiz{} system has three components:
+    \begin{itemize}
+      \item A \LaTeX{} document class file, \texttt{webquiz.cls}, and
+      a \TeX 4ht configuration file, \texttt{webquiz.cfg}, that enable the
+      quiz files to be processed by \LaTeX{} and \TeX 4ht, respectively.
+      \item A python program, \texttt{webquiz}, that translates the xml
+      file that is produced by \TeX 4ht into  HTML.
+      \item Some javascript and css that controls the quiz web page.
+    \end{itemize}
+
+   The \LaTeX{} component of \WebQuiz{} was written by Andrew Mathas
+   and the python, css and javascript code was written by Andrew Mathas
+   (and Don Taylor), based on an initial protype of Don Taylor's from
+   2001.  Since 2004 the program has been maintained and developed by
+   Andrew Mathas. Although the program has changed substantially since
+   2004 some of Don's code, and his idea of using \TeX 4ht, is still
+   in use.
+
+   For information on using \WebQuiz{} see the
+   \href{http://www.maths.usyd.edu.au/u/mathas/WebQuiz/webquiz-online-manual.html}{online documentation}.
+
+   Thanks are due to Bob Howlett for general help with CSS and, for
+   Version~5, to  Michal Hoftich for technical advice.
+\end{discussion}
+
+\end{document}

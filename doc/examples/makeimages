@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+
+r'''
+-----------------------------------------------------------------------------
+    makeimages | extract images from webquiz web pages for the manual
+-----------------------------------------------------------------------------
+
+    Copyright (C) Andrew Mathas, University of Sydney
+
+    Distributed under the terms of the GNU General Public License (GPL)
+                  http://www.gnu.org/licenses/
+
+    This file is part of the WebQuiz system.
+
+    <Andrew.Mathas@sydney.edu.au>
+-----------------------------------------------------------------------------
+
+Python script to extract png images for the various web pages that are in the
+webquiz manual. We first use
+    - webquiz to construct the web page
+    - webkit2png to extract an image of the web page, sometimes with options
+    - mogrify to trim the image down to size
+Alternatively, it is possible to extract a png image of the PDF file created by
+webquiz.  For the full extraction specifications see the pages array below
+'''
+
+import argparse
+import glob
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+# location of the webquiz example web pages on a development server
+examplesURL = "http://localhost/WebQuiz/doc/examples"
+examplesDIR = os.path.join(os.environ['HOME'], 'Code/WebQuiz/doc/examples')
+os.chdir(examplesDIR)
+
+# lambda function for running shell commands: run( command )
+run  = lambda cmd: subprocess.call(cmd, shell=True)
+
+webquiz_mode = '-qq -d'
+webkit2png_mode = ''
+
+class Convert:
+    r'''
+    Convert a webquiz example file into a png image for use in the
+    manual. The following parameters are accepted:
+      - page     =  name of the page to be produced
+      - src      = either pdf, html or ps which corresponds to the image
+                   being generated starting with pdflatex, webkit2png or latex
+      - page_out = output file                                         (default: file_in)
+      - delay    = time to wait in second before taking the screenshot (default: 3)
+
+      - question = a |-separated string of the form 'question:part',
+                   where part is comma separated, to "guess" that these
+                   parts are correct                                   (default: None)
+      - Question = a |-separated list of pairs 'question:value'        (default: None)
+      - js       = javascript commands                                 (default: '')
+      - js_end   = final javascript commands                           (default: '')
+      - width    = width of image
+    The actual conversion is done by the __call__ method of the class, which then uses write_image
+    '''
+
+    def __init__(self, page, **args):
+        # set some default values and then process the arguments
+        defaults = dict(
+            delay = 3,
+            js = '',
+            js_end = '',
+            page = page,
+            page_out = page,
+            Question = None,
+            question = None,
+            src = 'html',
+            webquiz = '',
+            width =500,
+        )
+        for key in defaults:
+            if key in args:
+                setattr(self, key, args[key])
+            else:
+                setattr(self, key, defaults[key])
+
+        if not self.Question is None:
+            for qval in self.Question.split('|'):
+                quest = qval.split(':')
+                self.js += "document.forms['Q{}Form'].elements[0].value='{}';".format(quest[0], quest[1])
+                if len(quest)==2: # checking is disabled by second colon: quest:value: => len=3
+                    self.js += 'gotoQuestion({q});checkAnswer({q});'.format(q=quest[0])
+                self.delay += 2
+
+        if not self.question is None:
+            for qp in self.question.split('|'):
+                quest = qp.split(':')
+                for p in quest[1].split(','):
+                    self.js += "document.forms['Q{}Form'].elements[{}].checked=true;".format(quest[0], int(p)-1)
+                if len(quest)==2: # checking is disabled by second colon: quest:parts: => len=3
+                    self.js += 'gotoQuestion({q});checkAnswer({q});'.format(q=quest[0])
+                self.delay += 2
+
+        # add on the final bit of javascript
+        self.js += self.js_end
+
+    def __call__(self, options):
+        r'''
+            Expand any glob patterms and then pass to write_image to
+            generate the images and clean up
+        '''
+        self.options = options
+        pages = self.page
+        for page in glob.glob(pages+'.tex'):
+            self.page = page[:-4]
+            if '*' in pages:
+                self.page_out = page[:-4]
+            self.write_image() # the actual conversion
+
+    # dictionary of conversion methods used in self.wrie_image()
+    convert = dict(
+        html = 'webkit2png',
+        pdf  = 'pdf2png',
+        ps   = 'ps2png'
+    )
+
+    def write_image(self):
+        r'''
+          Convert self.page to self.page_out.
+
+          If `cleaning` is `True` then all unnecessary files are deleted
+          once after the image is created
+        '''
+        if self.options.force or self.modified():
+            print('\nExtracting image file {}...'.format(self.page_out))
+            if os.path.exists(self.page_out+'.png'):
+                # remove png file if it already exists
+                os.remove(self.page_out+'.png')
+
+            try:
+                getattr(self, self.convert[self.src])()
+
+            except KeyError:
+                raise ValueError('unknown src={} for {}'.format(self.src, self.page))
+
+            if self.options.cleaning:
+                for ext in ['.log', '.xml', '-[cft]*.png']:
+                    for file in glob.glob(self.page_out+ext):
+                        os.remove(file)
+
+        else:
+            print('{} is up to date'.format(page.page_out))
+
+    def webkit2png(self):
+        r'''
+            Extract and trim and image using webquiz, webkit2png and mogrify
+        '''
+        # run the quiz file through webquiz
+        if not self.options.fast:
+            run('webquiz {} {} {}'.format(self.webquiz, webquiz_mode, self.page))
+
+        # extract a png image for the web page using webkit2png
+        cmd = r"webkit2png {debug} --ignore-ssl-check -o {fout} {width} --delay={delay} {js} {URL}/{fin}.html".format(
+                        URL=examplesURL,
+                        debug = webkit2png_mode,
+                        delay=self.delay,
+                        fin=self.page,
+                        fout=self.page_out,
+                        js='' if self.js is None 
+                              else '--js="{java}"'.format(java=self.js),
+                        width='-W {}'.format(self.width) if self.width!='' else '-F'
+                    )
+        if webkit2png_mode == '--debug':
+            print(cmd)
+        run(cmd)
+        if os.path.exists(os.path.join(examplesDIR, self.page_out+'-full.png')): # remove png file if it already exists
+            shutil.move(self.page_out+'-full.png', self.page_out+'.png')
+            run('mogrify -trim -gravity center {}.png'.format(self.page_out))
+        else:
+            print('makeimages error: webkit2png failed because {}-full.png does not exist'.format(self.page_out))
+
+    def pdf2png(self):
+        r'''
+            Extract and trim an image of the pdf file using pdflatex, convert and mogrify
+        '''
+        run('pdflatex {fin} > /dev/null'.format(fin=self.page))
+        run('convert {fin}.pdf {fout}.png && mogrify -trim {fout}.png'.format(fin=self.page, fout=self.page_out))
+
+    def ps2png(self):
+        r'''
+            Extract and trim an image of the pdf file using pdflatex, convert and mogrify
+        '''
+        run('latex {fin} > /dev/null'.format(fin=self.page))
+        run('dvips {fin} > /dev/null'.format(fin=self.page))
+        run('convert {fin}.ps {fout}.png && mogrify -trim {fout}.png'.format(fin=self.page, fout=self.page_out))
+
+    def modified(self):
+        r'''
+        Return `True` if the modification timestamp on the source file is newer
+        than the modification time on the image file.
+        '''
+        src_time = time.gmtime(os.path.getmtime(self.page+'.tex'))
+        try:
+            output_time = time.gmtime(os.path.getmtime(self.page_out+'.png'))
+        except FileNotFoundError:
+            return True
+
+        return src_time > output_time
+
+# Specify the pages to construct using the Convert class:
+pages = [
+    Convert("answer-complex", Question="1:7+i|2:i+7"),
+    Convert("answer-integer", Question="1:18"),
+    Convert("answer-lowercase", Question="1:long|2:LONG"),
+    Convert("answer-number", Question="1:0.75|2:3/4"),
+    Convert("answer-string", Question="1:canberra"),
+    Convert("answer-star", Question="1:Canberra|2:canberra"),
+    Convert("breadcrumbs", js="toggle_quizindex_menu();"),
+    Convert("breadcrumbs", page_out="quizindex-dropdown", js='toggle_quizindex_menu();'),
+    Convert("choice-multiple"),
+    Convert("choice-single"),
+    Convert("discussion"),
+    Convert("discussion-ref"),
+    Convert("discussion-Qref"),
+    Convert("display-as-image", question='1:2'),
+    Convert("french", question='1:1'),
+    Convert("index-en"),
+    Convert("index-cz"),
+    Convert("ctanLion"),
+    Convert("montypython"),
+    Convert("nounits"),
+    Convert("onepage", Question="1:3"),
+    Convert("pst2pdf", width=500),
+    Convert("pstricks-ex"),
+    Convert("quiz-page", question="1:4|1:5|3:3|2:3"),
+    Convert("random", js="questionOrder=[0,4,3,2,1];", Question='1:1:', js_end="gotoQuestion(4);checkAnswer(1);"),
+    Convert("simple", page_out='simple-html', question='1:1'),
+    Convert("simple", src='pdf',  page_out='simple-pdf'),
+    Convert("theme-*", width=500, question="1:1,7|3:1|3:1,7|6:4", js_end='toggle_quizindex_menu();'),
+    Convert("tikz-ex"),
+]
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description = 'Python script to extract images for the webquiz manual',
+                                     epilog = 'Images for all updated pages are extracted if none are specified'
+    )
+    parser.add_argument('images', nargs='*',type=str, default=None, help='list of one or images to extract')
+    parser.add_argument('-c', '--nocleaning', dest='cleaning', action='store_false', default=True, 
+                        help='do not delete all extraneous files on exit')
+    parser.add_argument('-d', '--debugging', action='store_true', default=False, help='turn on debugging')
+    parser.add_argument('--fast', action='store_true', default=False,
+            help='generate image without first calling webquiz')
+    parser.add_argument('-f', '--force', action='store_true', default=False, help='update all files without comparing timestamps')
+    parser.add_argument('-l', '--list', action='store_true', default=False, help='print list of generated image files')
+    parser.add_argument('-q', '--quiet', action='store_true', default=False, help='quiet output')
+
+    args = parser.parse_args()
+
+    # debugging mode
+    if args.debugging:
+        webquiz_mode = '--debugging'
+        webkit2png_mode = '--debug'
+        args.cleaning = False
+
+    if args.list:
+        for page in pages:
+            if '*' in page.page_out:
+                for img in glob.glob(page.page_out+'.png'):
+                    print(img[:-4])
+            else:
+                print(page.page_out)
+        sys.exit()
+
+    # By default all images are generated unless one or more output
+    # image file names are given on the command line. The is_good_page
+    # lambda function determines whether an image should be generated
+    # for the page
+    if args.images == []:
+        # generate all images
+        is_good_page = lambda page: True
+    else:
+        # only generate images that match one of the specified images
+        is_good_page = lambda page: any(re.search(image, page.page_out) for image in args.images)
+
+        # remove extensions from output file names
+        for page in range(len(args.images)):
+            name = args.images[page]
+            if '.' in name:
+                args.images[page] = name[:name.index('.')]
+
+    # run through pages and extract the corresponding images
+    for page in sorted(pages, key=lambda p: p.page_out):
+        if is_good_page(page):
+            page(args)

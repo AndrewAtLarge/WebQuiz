@@ -1,0 +1,27 @@
+\documentclass[svgnames]{webquiz}
+\usepackage{pst-all}
+\newcommand\C{\mathbb{C}}
+\title{A pstricks example}
+\begin{document}
+  \begin{question}
+     The shaded region in the graph
+     \begin{center}
+       \begin{pspicture}[unit=0.6cm](-3,-1.5)(3,4)
+         \pscircle[linewidth=1pt,linestyle=dashed,
+                   fillcolor=SkyBlue,fillstyle=solid](1,1){2}
+         \psaxes[linecolor=red,linewidth=1pt,labels=none]
+                    {->}(0,0)(-1.5,-1.5)(3.5,3.5)
+         \rput(3.75,0){$x$}  \rput(0,3.85){$iy$}
+         \rput(3,-0.4){3}    \rput(-0.4,3){3$i$}
+         \psdots(1,1)
+       \end{pspicture}
+     \end{center}
+     is equal to which of the following sets of complex numbers?
+     \begin{choice}[columns=2]
+       \incorrect $\{z \in \C : (z-1)^{2}+(z-(i+1))^{2}<2\}$
+       \incorrect $\{z \in \C : z+(i+1)<2\}$
+       \correct   $\{z \in \C : |z-(i+1)|<2\}$
+       \incorrect None of the above.
+     \end{choice}
+   \end{question}
+\end{document}
